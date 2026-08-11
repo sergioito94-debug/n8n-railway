@@ -1,0 +1,2921 @@
+{
+  "name": "Asistente Consulta con WhatsApp v2",
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EstadosConversacion",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "telefono",
+              "lookupValue": "={{ (($json.body.From) || '').replace('whatsapp:', '') }}"
+            }
+          ]
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        }
+      },
+      "id": "2998a23f-63e3-4151-8dd6-f16a600d938f",
+      "name": "Buscar estado pendiente",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2432,
+        96
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cc000001-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.esperando }}",
+              "rightValue": "CAMBIO_HORA",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cc000001-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.timestamp ? (Date.now() - new Date($json.timestamp).getTime()) / 3600000 : 999 }}",
+              "rightValue": 24,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "29d0b045-7538-45b8-8e6e-4db995b5a0f6",
+      "name": "Hay cambio pendiente?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2656,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const estado = $('Buscar estado pendiente').first().json;\nconst body = $('Webhook Respuestas').first().json.body;\nconst mensaje = (body.Body || '').trim();\nconst telefono = (body.From || '').replace('whatsapp:', '');\nconst nombre = body.ProfileName || 'Paciente';\n\nlet opciones = [];\ntry { opciones = JSON.parse(estado.opciones || '[]'); } catch (e) { opciones = []; }\n\nconst indice = parseInt(mensaje, 10) - 1;\nconst valido = !isNaN(indice) && indice >= 0 && indice < opciones.length;\n\nreturn [{\n  json: {\n    valido,\n    telefono,\n    nombre,\n    nuevaFechaHora: valido ? opciones[indice] : null,\n    id_cita_original: estado.id_cita_original || null,\n    calendar_id: estado.calendar_id || 'primary',\n    duracion_minutos: parseInt(estado.duracion_minutos, 10) || 60,\n    opciones_texto: opciones.map((iso, i) => {\n      const d = new Date(iso);\n      return `${i + 1}) ${d.toLocaleDateString('es-ES', {weekday:'short', day:'numeric', month:'short'})} ${d.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}`;\n    }).join('\\n'),\n    row_number: estado.row_number\n  }\n}];"
+      },
+      "id": "3393e566-49c5-4223-b6d4-84cd8f8d7b88",
+      "name": "Procesar Seleccion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cc000002-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f491dd48-3712-4f1f-a1e6-0733858574e0",
+      "name": "Seleccion valida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3104,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_CALENDAR_EMAIL",
+          "mode": "list",
+          "cachedResultName": "REEMPLAZAR_GOOGLE_CALENDAR_EMAIL"
+        },
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{ $json.nuevaFechaHora }}",
+          "timeMax": "={{ new Date(new Date($json.nuevaFechaHora).getTime() + $json.duracion_minutos*60000).toISOString() }}",
+          "singleEvents": true
+        }
+      },
+      "id": "5d371bfa-05ad-4158-97e8-f018cb3236c9",
+      "name": "Verificar Disponibilidad",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        3328,
+        384
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GCALENDAR",
+          "name": "Google Calendar account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sel = $('Procesar Seleccion').first().json;\nconst eventos = $input.all().filter(e => e.json && e.json.id);\nconst libre = eventos.length === 0;\nreturn [{\n  json: { ...sel, libre }\n}];"
+      },
+      "id": "fb2154b2-a4fa-427a-b844-df373ed7272b",
+      "name": "Comprobar Hueco",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3552,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cc000003-0000-4000-8000-000000000004",
+              "leftValue": "={{ $json.libre }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6f4c61d9-2061-4f0e-8229-44927690f84d",
+      "name": "Hueco libre?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3776,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_CALENDAR_EMAIL",
+          "mode": "list",
+          "cachedResultName": "REEMPLAZAR_GOOGLE_CALENDAR_EMAIL"
+        },
+        "eventId": "={{ $json.id_cita_original }}",
+        "updateFields": {
+          "end": "={{ new Date(new Date($json.nuevaFechaHora).getTime() + $json.duracion_minutos*60000).toISOString() }}",
+          "start": "={{ $json.nuevaFechaHora }}"
+        }
+      },
+      "id": "2cd7a5f5-db35-4ce7-95be-4f005d4d1d3c",
+      "name": "Mover Evento Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        4000,
+        304
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GCALENDAR",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sel = $('Procesar Seleccion').first().json;\nconst d = new Date(sel.nuevaFechaHora);\nconst fecha = d.toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long'});\nconst hora = d.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'});\nreturn [{\n  json: {\n    telefono: sel.telefono,\n    nombre: sel.nombre,\n    respuesta: 'CAMBIADA',\n    id_cita: sel.id_cita_original,\n    fecha,\n    hora,\n    nuevaFechaHora: sel.nuevaFechaHora,\n    row_number_estado: sel.row_number,\n    mensaje: `✅ ¡Listo ${sel.nombre}! Tu cita queda reprogramada para el *${fecha}* a las *${hora}*. ¡Te esperamos!`\n  }\n}];"
+      },
+      "id": "82f748ff-9e9e-4300-aa37-e6e9a9f52abe",
+      "name": "Msg Cambio Confirmado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Hoja 1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_cita": "={{ $json.id_cita }}",
+            "fecha": "={{ $json.fecha }}",
+            "hora": "={{ $json.hora }}",
+            "estado": "CAMBIADA",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "id_cita"
+          ],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "paciente",
+              "displayName": "paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recordatorio_enviado",
+              "displayName": "recordatorio_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "541fd00e-9fb7-4235-a3d7-fba8c2039f22",
+      "name": "Actualizar Cita Reprogramada",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        4448,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EstadosConversacion",
+          "mode": "name"
+        },
+        "startIndex": "={{ $('Msg Cambio Confirmado').first().json.row_number_estado }}"
+      },
+      "id": "d16fdaab-06ca-4d84-aac4-fd6b0e85cca1",
+      "name": "Limpiar Estado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        4672,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/REEMPLAZAR_TWILIO_ACCOUNT_SID/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:REEMPLAZAR_TWILIO_WHATSAPP_NUMBER"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $('Msg Cambio Confirmado').first().json.telefono }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $('Msg Cambio Confirmado').first().json.mensaje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e9afa9ff-c411-43f2-bb42-38b7972ad430",
+      "name": "Enviar Confirmacion Cambio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4896,
+        304
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TWILIO",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sel = $('Procesar Seleccion').first().json;\nreturn [{\n  json: {\n    telefono: sel.telefono,\n    mensaje: `Vaya, ese horario se acaba de ocupar 😕. Estos siguen disponibles, responde con el número:\\n\\n${sel.opciones_texto}`\n  }\n}];"
+      },
+      "id": "6e346af0-7505-428d-8c85-d5dfb9317092",
+      "name": "Msg Hueco Ocupado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4000,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sel = $('Procesar Seleccion').first().json;\nreturn [{\n  json: {\n    telefono: sel.telefono,\n    mensaje: `No he reconocido esa opción 🤔. Por favor responde solo con el número del horario que prefieras:\\n\\n${sel.opciones_texto}`\n  }\n}];"
+      },
+      "id": "7ab76274-6f45-4692-8f75-8f967a578fa8",
+      "name": "Msg Seleccion Invalida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3328,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/REEMPLAZAR_TWILIO_ACCOUNT_SID/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:REEMPLAZAR_TWILIO_WHATSAPP_NUMBER"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.telefono }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.mensaje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "03f61865-9613-4f2e-a701-ab57c62ddfd9",
+      "name": "Reenviar Opciones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3776,
+        576
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TWILIO",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Hoja 1",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "telefono",
+              "lookupValue": "={{ $json.telefono }}"
+            }
+          ]
+        },
+        "options": {
+          "returnAllMatches": "returnFirstMatch"
+        }
+      },
+      "id": "0d72d77b-26e8-4203-9b84-8a4f293efc58",
+      "name": "Buscar Cita Original",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        3520,
+        320
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list",
+          "cachedResultName": "primary"
+        },
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{ $now.toISO() }}",
+          "timeMax": "={{ $now.plus({days:7}).toISO() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "447e6758-0f9d-4d6b-b090-c20f90f9a402",
+      "name": "Citas Calendario 7d",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        3840,
+        80
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GCALENDAR",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuracion del horario laboral (ajusta a la agenda real del profesional)\nconst HORA_INICIO = 9;\nconst HORA_FIN = 19;\nconst DIAS_LABORABLES = [1, 2, 3, 4, 5]; // lunes a viernes\nconst DURACION_MIN = parseInt($('Buscar Cita Original').first().json.duracion_minutos, 10) || 60;\nconst MAX_HUECOS = 5;\nconst VENTANA_DIAS = 7;\n\nconst citaOriginal = $('Buscar Cita Original').first().json;\nconst datos = $('Extraer Respuesta1').first().json;\n\n// Eventos ocupados desde Calendar\nconst ocupados = $input.all()\n  .filter(e => e.json && e.json.start)\n  .filter(e => !(e.json.summary || '').startsWith('❌ CANCELADA'))\n  .map(e => ({\n    start: new Date(e.json.start.dateTime || e.json.start.date),\n    end: new Date(e.json.end.dateTime || e.json.end.date)\n  }));\n\nfunction solapa(a, b) { return a.start < b.end && b.start < a.end; }\n\nconst ahora = new Date();\nconst fin = new Date(ahora.getTime() + VENTANA_DIAS * 86400000);\nconst huecos = [];\nlet cursor = new Date(ahora);\ncursor.setMinutes(Math.ceil(cursor.getMinutes() / 30) * 30, 0, 0);\n\nwhile (huecos.length < MAX_HUECOS && cursor < fin) {\n  const dia = cursor.getDay();\n  const hora = cursor.getHours();\n  const finSlotHora = new Date(cursor.getTime() + DURACION_MIN * 60000).getHours();\n  if (DIAS_LABORABLES.includes(dia) && hora >= HORA_INICIO && finSlotHora <= HORA_FIN && (hora < HORA_FIN)) {\n    const candidato = { start: new Date(cursor), end: new Date(cursor.getTime() + DURACION_MIN * 60000) };\n    if (!ocupados.some(o => solapa(o, candidato))) {\n      huecos.push(new Date(cursor));\n    }\n  }\n  cursor = new Date(cursor.getTime() + 30 * 60000);\n}\n\nconst opcionesIso = huecos.map(h => h.toISOString());\nconst lista = huecos.map((h, i) =>\n  `${i + 1}) ${h.toLocaleDateString('es-ES', {weekday:'short', day:'numeric', month:'short'})} ${h.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})}`\n).join('\\n');\n\nconst mensaje = huecos.length\n  ? `🔄 Estos son los próximos huecos disponibles, ${datos.nombre}. Responde con el número que prefieras:\\n\\n${lista}`\n  : `Lo siento ${datos.nombre}, no encuentro huecos libres en los próximos ${VENTANA_DIAS} días. Te contactaremos para buscar una fecha.`;\n\nreturn [{\n  json: {\n    telefono: datos.telefono,\n    nombre: datos.nombre,\n    opciones: JSON.stringify(opcionesIso),\n    id_cita_original: citaOriginal.id_cita || '',\n    calendar_id: 'primary',\n    duracion_minutos: DURACION_MIN,\n    hay_huecos: huecos.length > 0,\n    mensaje,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "e17f9a2c-d171-4e53-a577-1cc88fd0e524",
+      "name": "Calcular Huecos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4016,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "EstadosConversacion",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefono": "={{ $json.telefono }}",
+            "esperando": "CAMBIO_HORA",
+            "opciones": "={{ $json.opciones }}",
+            "id_cita_original": "={{ $json.id_cita_original }}",
+            "calendar_id": "={{ $json.calendar_id }}",
+            "duracion_minutos": "={{ $json.duracion_minutos }}",
+            "timestamp": "={{ $json.timestamp }}",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "telefono"
+          ],
+          "schema": [
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "esperando",
+              "displayName": "esperando",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "opciones",
+              "displayName": "opciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "id_cita_original",
+              "displayName": "id_cita_original",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "calendar_id",
+              "displayName": "calendar_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "duracion_minutos",
+              "displayName": "duracion_minutos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d4d0c7a2-343c-48ba-9c85-5bafc7b57d7b",
+      "name": "Guardar Estado Cambio",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        4224,
+        80
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/REEMPLAZAR_TWILIO_ACCOUNT_SID/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:REEMPLAZAR_TWILIO_WHATSAPP_NUMBER"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $('Calcular Huecos').first().json.telefono }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $('Calcular Huecos').first().json.mensaje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f198cfd0-74cb-4be2-b8a0-8b77c7d05faf",
+      "name": "Enviar Opciones Cambio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4464,
+        80
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TWILIO",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list",
+          "cachedResultName": "primary"
+        },
+        "options": {
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "c64db4a0-10c8-483e-9c30-0f41a3bcd005",
+      "name": "Citas en 48h1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -464
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GCALENDAR",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list",
+          "cachedResultName": "primary"
+        },
+        "options": {
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "203de72e-0e4b-4281-9c75-b57ed8b769cb",
+      "name": "Citas en 2h1",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -272
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GCALENDAR",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.description }}",
+              "rightValue": "telefono:",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "d0425f5d-01f0-49d8-8bf4-60990c89e4ba",
+      "name": "Tiene telefono? (48h)1",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.description }}",
+              "rightValue": "telefono:",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "672752e2-f702-449f-bd81-1bb5750c537d",
+      "name": "Tiene telefono? (2h)1",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nfor (const item of $input.all()) {\n  const desc = item.json.description || '';\n  const summary = item.json.summary || 'Paciente';\n  const telefonoMatch = desc.match(/telefono:\\s*([^\\s|\\n]+)/i);\n  const telefono = telefonoMatch ? telefonoMatch[1].trim() : null;\n  const nombreMatch = desc.match(/nombre:\\s*([^\\||\\n]+)/i);\n  const nombre = nombreMatch ? nombreMatch[1].trim() : summary;\n  const startTime = item.json.start?.dateTime || item.json.start?.date;\n  const hora = startTime ? new Date(startTime).toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'}) : 'hora no definida';\n  const fecha = startTime ? new Date(startTime).toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'long'}) : 'fecha no definida';\n  if (telefono) {\n    items.push({\n      json: {\n        id_cita: item.json.id,\n        nombre,\n        telefono: telefono.startsWith('+') ? telefono : '+34' + telefono,\n        fecha,\n        hora,\n        tipo_recordatorio: '48h'\n      }\n    });\n  }\n}\nreturn items;"
+      },
+      "id": "a2c55f8a-e7a2-43bf-b0a0-40273c9fcedc",
+      "name": "Extraer Datos (48h)1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nfor (const item of $input.all()) {\n  const desc = item.json.description || '';\n  const summary = item.json.summary || 'Paciente';\n  const telefonoMatch = desc.match(/telefono:\\s*([^\\s|\\n]+)/i);\n  const telefono = telefonoMatch ? telefonoMatch[1].trim() : null;\n  const nombreMatch = desc.match(/nombre:\\s*([^\\||\\n]+)/i);\n  const nombre = nombreMatch ? nombreMatch[1].trim() : summary;\n  const startTime = item.json.start?.dateTime || item.json.start?.date;\n  const hora = startTime ? new Date(startTime).toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'}) : 'hora no definida';\n  const fecha = startTime ? new Date(startTime).toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'long'}) : 'fecha no definida';\n  if (telefono) {\n    items.push({\n      json: {\n        id_cita: item.json.id,\n        nombre,\n        telefono: telefono.startsWith('+') ? telefono : '+34' + telefono,\n        fecha,\n        hora,\n        tipo_recordatorio: '2h'\n      }\n    });\n  }\n}\nreturn items;"
+      },
+      "id": "d06fe8ba-c20a-41b0-9220-3f5d996b6f7e",
+      "name": "Extraer Datos (2h)1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Hoja 1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_cita": "=={{ $json.id_cita }}",
+            "paciente": "=={{ $json.nombre }}",
+            "telefono": "=={{ $json.telefono }}",
+            "fecha": "=={{ $json.fecha }}",
+            "hora": "=={{ $json.hora }}",
+            "estado": "Recordatorio enviado",
+            "recordatorio_enviado": "48h"
+          },
+          "matchingColumns": [
+            "id_cita"
+          ],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "paciente",
+              "displayName": "paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recordatorio_enviado",
+              "displayName": "recordatorio_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a2e6756b-7ffe-4e34-b25d-202484b1c29b",
+      "name": "Ya enviado? (48h)1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2880,
+        -464
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REEMPLAZAR_GOOGLE_SHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_cita": "=={{ $json.id_cita }}",
+            "paciente": "=={{ $json.nombre }}",
+            "telefono": "=={{ $json.telefono }}",
+            "fecha": "=={{ $json.fecha }}",
+            "hora": "=={{ $json.hora }}",
+            "estado": "Recordatorio enviado",
+            "recordatorio_enviado": "2h"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "paciente",
+              "displayName": "paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordatorio_enviado",
+              "displayName": "recordatorio_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8fd6af1c-bea1-428d-8afb-5a8d0eb98bd0",
+      "name": "Ya enviado? (2h)1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2880,
+        -272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.Recordatorio_Enviado }}",
+              "rightValue": "48h",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "5ab894b0-de1a-4429-8bc9-64e9eff395ce",
+      "name": "Filtrar enviados (48h)1",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        3104,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.Recordatorio_Enviado }}",
+              "rightValue": "2h",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "1f411335-f358-4ef4-b4ca-2ee9a2b1d299",
+      "name": "Filtrar enviados (2h)1",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        3104,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cita = $('Extraer Datos (48h)1').first().json;\n\nconst mensaje = `Hola ${cita.nombre} 👋\n\nTe recordamos que tienes cita el *${cita.fecha}* a las *${cita.hora}*.\n\nPor favor confirma tu asistencia respondiendo:\n✅ *SÍ* para confirmar\n❌ *NO* para cancelar\n🔄 *CAMBIAR* si necesitas otro horario`;\n\nreturn [{\n  json: {\n    nombre: cita.nombre,\n    telefono: cita.telefono,\n    fecha: cita.fecha,\n    hora: cita.hora,\n    id_cita: cita.id_cita,\n    mensaje: mensaje,\n    tipo_recordatorio: '48h'\n  }\n}];"
+      },
+      "id": "dda7111d-0db1-427e-85fd-594ca7e29e1e",
+      "name": "Mensaje 48h1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3328,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cita = $('Extraer Datos (2h)1').first().json;\n\nconst mensaje = `⏰ Hola ${cita.nombre}, te recordamos que tu cita es *HOY a las ${cita.hora}*.\n\nTe esperamos. Si tienes algún problema para venir escríbenos cuanto antes.`;\n\nreturn [{\n  json: {\n    nombre: cita.nombre,\n    telefono: cita.telefono,\n    fecha: cita.fecha,\n    hora: cita.hora,\n    id_cita: cita.id_cita,\n    mensaje: mensaje,\n    tipo_recordatorio: '2h'\n  }\n}];"
+      },
+      "id": "ccf08042-04ad-4408-babf-045eafb97b7c",
+      "name": "Mensaje 2h1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3328,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/REEMPLAZAR_TWILIO_ACCOUNT_SID/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:REEMPLAZAR_TWILIO_WHATSAPP_NUMBER"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.telefono }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.mensaje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30ebaa99-5de1-4ffb-a9c2-41a4295b3109",
+      "name": "Enviar WhatsApp (48h)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3552,
+        -464
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TWILIO",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/REEMPLAZAR_TWILIO_ACCOUNT_SID/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:REEMPLAZAR_TWILIO_WHATSAPP_NUMBER"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.telefono }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.mensaje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "64ea6d41-3b8b-482c-a95d-dea15a33f5c2",
+      "name": "Enviar WhatsApp (2h)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3552,
+        -272
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TWILIO",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Hoja 1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_cita": "={{ $('Mensaje 48h1').first().json.id_cita }}",
+            "paciente": "={{ $('Mensaje 48h1').first().json.nombre }}",
+            "telefono": "={{ $('Mensaje 48h1').first().json.telefono }}",
+            "fecha": "={{ $('Mensaje 48h1').first().json.fecha }}",
+            "hora": "={{ $('Mensaje 48h1').first().json.hora }}",
+            "estado": "Recordatorio enviado",
+            "recordatorio_enviado": "48h"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "paciente",
+              "displayName": "paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recordatorio_enviado",
+              "displayName": "recordatorio_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1674d9a7-493e-4be1-bffb-d87118d59ed2",
+      "name": "Registrar en Sheets (48h)1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        3760,
+        -464
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Hoja 1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_cita": "={{ $('Mensaje 2h1').first().json.id_cita }}",
+            "paciente": "={{ $('Mensaje 2h1').first().json.nombre }}",
+            "telefono": "={{ $('Mensaje 2h1').first().json.telefono }}",
+            "fecha": "={{ $('Mensaje 2h1').first().json.fecha }}",
+            "hora": "={{ $('Mensaje 2h1').first().json.hora }}",
+            "estado": "Recordatorio enviado",
+            "recordatorio_enviado": "2h"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "paciente",
+              "displayName": "paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recordatorio_enviado",
+              "displayName": "recordatorio_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8976fefe-bf96-45c8-9970-e2ba95ed0a06",
+      "name": "Registrar en Sheets (2h)1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        3760,
+        -272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "REEMPLAZAR_TELEGRAM_CHAT_ID",
+        "text": "=✅ *Recordatorio enviado (48h)*\n\n👤 {{ $('Mensaje 48h1').first().json.nombre }}\n📞 {{ $('Mensaje 48h1').first().json.telefono }}\n📅 {{ $('Mensaje 48h1').first().json.fecha }} a las {{ $('Mensaje 48h1').first().json.hora }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "48bb5b7e-8407-41f7-85c5-f785245ea453",
+      "name": "Notificar Telegram (48h)1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        3984,
+        -464
+      ],
+      "webhookId": "c102d14e-3b45-4998-a6ab-adef0ef5cf4c",
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TELEGRAM",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "REEMPLAZAR_TELEGRAM_CHAT_ID",
+        "text": "=⏰ *Recordatorio enviado (2h)*\n\n👤 {{ $('Mensaje 2h1').first().json.nombre }}\n📞 {{ $('Mensaje 2h1').first().json.telefono }}\n📅 {{ $('Mensaje 2h1').first().json.fecha }} a las {{ $('Mensaje 2h1').first().json.hora }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "3a7555af-4c8e-4b61-91ed-9b3350cc61f1",
+      "name": "Notificar Telegram (2h)1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        3984,
+        -272
+      ],
+      "webhookId": "6265ae1c-cd0d-4906-8afa-b3c8c8fe4480",
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TELEGRAM",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook Respuestas').first().json.body;\nconst mensaje = (body.Body || '').trim().toUpperCase();\nconst telefono = (body.From || '').replace('whatsapp:', '');\nconst nombre = body.ProfileName || 'Paciente';\n\nlet respuesta;\nif (mensaje.includes('SI') || mensaje.includes('SÍ') || mensaje === '1') {\n  respuesta = 'CONFIRMADA';\n} else if (mensaje.includes('NO') || mensaje === '2') {\n  respuesta = 'CANCELADA';\n} else if (mensaje.includes('CAMBIAR') || mensaje.includes('CAMBIO') || mensaje === '3') {\n  respuesta = 'CAMBIO';\n} else {\n  respuesta = 'NO_RECONOCIDA';\n}\n\nreturn [{\n  json: {\n    telefono,\n    nombre,\n    mensaje_original: body.Body,\n    respuesta,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "7053ed61-b517-4271-a554-9bd3cfcb95a6",
+      "name": "Extraer Respuesta1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.respuesta}}",
+                    "rightValue": "CONFIRMADA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "6729d145-ec68-414b-b2ca-348353df1070"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "afd03ee7-eb39-4196-bf31-bc7a41a36f97",
+                    "leftValue": "={{$json.respuesta}}",
+                    "rightValue": "CANCELADA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "1f5edf31-b715-452e-a4ca-c20deeb219b8",
+                    "leftValue": "={{$json.respuesta}}",
+                    "rightValue": "CAMBIO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "723d97fb-da3c-4882-a529-0107d057e5e5",
+      "name": "Switch Respuesta1",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        3072,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    telefono: $input.first().json.telefono,\n    nombre: $input.first().json.nombre,\n    respuesta: $input.first().json.respuesta,\n    mensaje: '✅ ¡Perfecto! Tu cita está confirmada. Te esperamos. Si necesitas cualquier cosa no dudes en escribirnos.'\n  }\n}];"
+      },
+      "id": "6e8b5bb5-dfba-4f85-997f-3f128dc6eccc",
+      "name": "Msg Confirmada1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    telefono: $input.first().json.telefono,\n    nombre: $input.first().json.nombre,\n    respuesta: $input.first().json.respuesta,\n    mensaje: '❌ Entendido, hemos cancelado tu cita. Cuando quieras reagendar escríbenos y buscamos un hueco para ti.'\n  }\n}];"
+      },
+      "id": "df9745f1-3ed0-4c00-afc7-f250139c5da0",
+      "name": "Msg Cancelada1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    telefono: $input.first().json.telefono,\n    nombre: $input.first().json.nombre,\n    respuesta: $input.first().json.respuesta,\n    mensaje: '🔄 Sin problema, ¿qué día y hora te vendría mejor? Dinos tu disponibilidad y lo gestionamos.'\n  }\n}];"
+      },
+      "id": "7550f23b-e4c9-40ca-b4f6-c59cd3a2fb64",
+      "name": "Msg Cambio1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    telefono: $input.first().json.telefono,\n    nombre: $input.first().json.nombre,\n    respuesta: $input.first().json.respuesta,\n    mensaje: 'No hemos entendido tu respuesta. Por favor contesta:\\n\\n1 o SÍ → Confirmar cita\\n2 o NO → Cancelar cita\\n3 o CAMBIAR → Cambiar cita'\n  }\n}];"
+      },
+      "id": "3c1de48d-ce34-4ed6-aa59-d4840b4fdf36",
+      "name": "Msg No Reconocida1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2656,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/REEMPLAZAR_TWILIO_ACCOUNT_SID/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "whatsapp:REEMPLAZAR_TWILIO_WHATSAPP_NUMBER"
+            },
+            {
+              "name": "To",
+              "value": "=whatsapp:{{ $json.telefono }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.mensaje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "814cb516-8fe6-4843-8c75-62d66c91cc4a",
+      "name": "Responder por WhatsApp1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3632,
+        -112
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TWILIO",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Hoja 1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": 0,
+            "id_cita": "=",
+            "estado": "{{ $json.respuesta }}",
+            "recordatorio_enviado": "={{ $now }}",
+            "telefono": "={{ $json.telefono }}"
+          },
+          "matchingColumns": [
+            "telefono"
+          ],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "paciente",
+              "displayName": "paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recordatorio_enviado",
+              "displayName": "recordatorio_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6fb841a7-d181-4780-b823-92ba6adba0dd",
+      "name": "Actualizar Estado en Sheets1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        3824,
+        -112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "REEMPLAZAR_TELEGRAM_CHAT_ID",
+        "text": "=📱 *Respuesta recibida*\n\n👤 {{ $('Extraer Respuesta1').first().json.nombre }}\n📞 {{ $('Extraer Respuesta1').first().json.telefono }}\n💬 Estado: *{{ $('Extraer Respuesta1').first().json.respuesta }}*\n🕐 {{ $('Extraer Respuesta1').first().json.timestamp }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "b6cf0dc5-7ea8-47d0-9101-90cdeae5fd07",
+      "name": "Notificar Respuesta Telegram1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        4016,
+        -112
+      ],
+      "webhookId": "36c81b62-604c-48e4-8e0b-5af06e599186",
+      "credentials": {
+        "telegramApi": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_TELEGRAM",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      },
+      "id": "0c86980c-e9f1-4915-8ec4-a479434f2c04",
+      "name": "Responder Webhook1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        4224,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-respuesta",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "241ce2b3-5d66-47fe-ad9f-8c1460011f18",
+      "name": "Webhook Respuestas",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        48
+      ],
+      "webhookId": "301bb00e-a13a-46cc-bb92-062f5302b2f7"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "896c99be-3e69-4e10-97eb-ca41d62ea0df",
+      "name": "Trigger 8:00 (2h antes)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "268c5e83-529c-4940-a6b9-90c492cd470e",
+      "name": "Trigger 9:00 (48h antes)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REEMPLAZAR_GOOGLE_SHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefono": "={{ $json.telefono }}"
+          },
+          "matchingColumns": [
+            "telefono"
+          ],
+          "schema": [
+            {
+              "id": "id_cita",
+              "displayName": "id_cita",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "paciente",
+              "displayName": "paciente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "recordatorio_enviado",
+              "displayName": "recordatorio_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3440,
+        64
+      ],
+      "id": "6a81f858-a074-4d02-acd9-e9cea50ee98a",
+      "name": "Buscar Cita para Cancelar",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GSHEETS",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "value": "REEMPLAZAR_GOOGLE_CALENDAR_EMAIL",
+          "mode": "list",
+          "cachedResultName": "REEMPLAZAR_GOOGLE_CALENDAR_EMAIL"
+        },
+        "eventId": "={{ $json.id_cita }}",
+        "updateFields": {
+          "color": "11",
+          "summary": "={{ '❌ CANCELADA - ' + $json.paciente }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        3632,
+        64
+      ],
+      "id": "fcc835f0-3434-4e0b-ac3d-e45de3ad1eb4",
+      "name": "Cancelar Evento Calendar",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_GCALENDAR",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $('Msg Cancelada1').first().json;\nreturn [{\n  json: {\n    telefono: msg.telefono,\n    nombre: msg.nombre,\n    respuesta: msg.respuesta,\n    mensaje: msg.mensaje\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3456,
+        -112
+      ],
+      "id": "53e11aee-5cbd-448d-b057-28dad5cd130a",
+      "name": "Recuperar Mensaje Cancelación"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst authToken = $env.TWILIO_AUTH_TOKEN;\nconst headers = $('Webhook Respuestas').first().json.headers;\nconst twilioSignature = headers['x-twilio-signature'];\nconst url = 'https://REEMPLAZAR_TU_DOMINIO_N8N/webhook/whatsapp-respuesta';\nconst params = $('Webhook Respuestas').first().json.body;\n\nconst sortedKeys = Object.keys(params).sort();\nlet dataString = url;\nfor (const key of sortedKeys) {\n  dataString += key + params[key];\n}\n\nconst expectedSignature = crypto.createHmac('sha1', authToken).update(Buffer.from(dataString, 'utf-8')).digest('base64');\n\nif (expectedSignature !== twilioSignature) {\n  throw new Error('Firma de Twilio inválida - petición rechazada');\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        48
+      ],
+      "id": "640048a0-9ae1-4723-bae9-8441a97f357c",
+      "name": "Validar Firma Twilio"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 10,\n  \"system\": \"Eres un clasificador de respuestas de pacientes a un recordatorio de cita médica. Clasifica el mensaje en exactamente una de estas 4 palabras: CONFIRMADA, CANCELADA, CAMBIO, NO_RECONOCIDA. CONFIRMADA si confirma que asistirá. CANCELADA si cancela, no puede ir, o dice que no. CAMBIO si quiere reprogramar. NO_RECONOCIDA si no se entiende. Responde SOLO con esa palabra, sin explicación ni puntuación.\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"{{ $('Webhook Respuestas').first().json.body.Body }}\"}]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2640,
+        -64
+      ],
+      "id": "5f71d29d-4546-462d-84ce-486a735b4378",
+      "name": "Clasificar Respuesta con IA",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_CREDENTIAL_ID_ANTHROPIC",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let respuestaIA = 'NO_RECONOCIDA';\ntry {\n  respuestaIA = $input.first().json.content[0].text.trim().toUpperCase();\n} catch (e) {\n  respuestaIA = 'NO_RECONOCIDA';\n}\nreturn [{ json: { ...$('Extraer Respuesta').first().json, respuesta: respuestaIA } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        -64
+      ],
+      "id": "2b342085-fb15-4f63-acb9-fc381c5efeca",
+      "name": "Extraer Clasificación IA"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Buscar estado pendiente": {
+      "main": [
+        [
+          {
+            "node": "Hay cambio pendiente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay cambio pendiente?": {
+      "main": [
+        [
+          {
+            "node": "Procesar Seleccion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extraer Respuesta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Seleccion": {
+      "main": [
+        [
+          {
+            "node": "Seleccion valida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccion valida?": {
+      "main": [
+        [
+          {
+            "node": "Verificar Disponibilidad",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Msg Seleccion Invalida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Disponibilidad": {
+      "main": [
+        [
+          {
+            "node": "Comprobar Hueco",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar Hueco": {
+      "main": [
+        [
+          {
+            "node": "Hueco libre?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hueco libre?": {
+      "main": [
+        [
+          {
+            "node": "Mover Evento Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Msg Hueco Ocupado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mover Evento Calendar": {
+      "main": [
+        [
+          {
+            "node": "Msg Cambio Confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg Cambio Confirmado": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Cita Reprogramada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Cita Reprogramada": {
+      "main": [
+        [
+          {
+            "node": "Limpiar Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpiar Estado": {
+      "main": [
+        [
+          {
+            "node": "Enviar Confirmacion Cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Confirmacion Cambio": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg Hueco Ocupado": {
+      "main": [
+        [
+          {
+            "node": "Reenviar Opciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg Seleccion Invalida": {
+      "main": [
+        [
+          {
+            "node": "Reenviar Opciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reenviar Opciones": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Cita Original": {
+      "main": [
+        [
+          {
+            "node": "Citas Calendario 7d",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citas Calendario 7d": {
+      "main": [
+        [
+          {
+            "node": "Calcular Huecos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Huecos": {
+      "main": [
+        [
+          {
+            "node": "Guardar Estado Cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Estado Cambio": {
+      "main": [
+        [
+          {
+            "node": "Enviar Opciones Cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Opciones Cambio": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citas en 48h1": {
+      "main": [
+        [
+          {
+            "node": "Tiene telefono? (48h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citas en 2h1": {
+      "main": [
+        [
+          {
+            "node": "Tiene telefono? (2h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiene telefono? (48h)1": {
+      "main": [
+        [
+          {
+            "node": "Extraer Datos (48h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tiene telefono? (2h)1": {
+      "main": [
+        [
+          {
+            "node": "Extraer Datos (2h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos (48h)1": {
+      "main": [
+        [
+          {
+            "node": "Ya enviado? (48h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos (2h)1": {
+      "main": [
+        [
+          {
+            "node": "Ya enviado? (2h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ya enviado? (48h)1": {
+      "main": [
+        [
+          {
+            "node": "Filtrar enviados (48h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ya enviado? (2h)1": {
+      "main": [
+        [
+          {
+            "node": "Filtrar enviados (2h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar enviados (48h)1": {
+      "main": [
+        [
+          {
+            "node": "Mensaje 48h1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar enviados (2h)1": {
+      "main": [
+        [
+          {
+            "node": "Mensaje 2h1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje 48h1": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (48h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje 2h1": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (2h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp (48h)1": {
+      "main": [
+        [
+          {
+            "node": "Registrar en Sheets (48h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp (2h)1": {
+      "main": [
+        [
+          {
+            "node": "Registrar en Sheets (2h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar en Sheets (48h)1": {
+      "main": [
+        [
+          {
+            "node": "Notificar Telegram (48h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar en Sheets (2h)1": {
+      "main": [
+        [
+          {
+            "node": "Notificar Telegram (2h)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Respuesta1": {
+      "main": [
+        [
+          {
+            "node": "Clasificar Respuesta con IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Respuesta1": {
+      "main": [
+        [
+          {
+            "node": "Msg Confirmada1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Msg Cancelada1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar Cita Original",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg Confirmada1": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg Cancelada1": {
+      "main": [
+        [
+          {
+            "node": "Buscar Cita para Cancelar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg Cambio1": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Msg No Reconocida1": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder por WhatsApp1": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Estado en Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Estado en Sheets1": {
+      "main": [
+        [
+          {
+            "node": "Notificar Respuesta Telegram1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificar Respuesta Telegram1": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Respuestas": {
+      "main": [
+        [
+          {
+            "node": "Validar Firma Twilio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger 8:00 (2h antes)": {
+      "main": [
+        [
+          {
+            "node": "Citas en 2h1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger 9:00 (48h antes)": {
+      "main": [
+        [
+          {
+            "node": "Citas en 48h1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Cita para Cancelar": {
+      "main": [
+        [
+          {
+            "node": "Cancelar Evento Calendar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Recuperar Mensaje Cancelación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelar Evento Calendar": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recuperar Mensaje Cancelación": {
+      "main": [
+        [
+          {
+            "node": "Responder por WhatsApp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Firma Twilio": {
+      "main": [
+        [
+          {
+            "node": "Buscar estado pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar Respuesta con IA": {
+      "main": [
+        [
+          {
+            "node": "Extraer Clasificación IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Clasificación IA": {
+      "main": [
+        [
+          {
+            "node": "Switch Respuesta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "REEMPLAZAR_ID_ERROR_WORKFLOW"
+  },
+  "versionId": "cdeb6c21-b9d9-44c5-b6b5-69728023b801",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6dcad1a7aaa05d2f652a6cbe2821232038b273a58f420d49ff433bdf757b69a1"
+  },
+  "nodeGroups": [],
+  "id": "7mLAHwstSTj6B7mc",
+  "tags": []
+}
